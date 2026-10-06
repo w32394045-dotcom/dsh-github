@@ -59,8 +59,24 @@ if (-not (Test-Path $ProfileDir)) { Die "找不到 profile 目录：$ProfileDir"
 $RuntimeRoot = Join-Path $DshHome 'dsh-runtimes\dsh-primary-runtime\dependencies'
 $BundledNode = Join-Path $RuntimeRoot 'node\bin\node.exe'
 $BundledPnpm = Join-Path $RuntimeRoot 'pnpm\bin\pnpm.cjs'
-$Node = if (Test-Path $BundledNode) { $BundledNode } else { (Get-Command node -ErrorAction SilentlyContinue).Source }
-if (-not $Node) { Die "找不到 node：既没有 dsh 自带的，也没有 PATH 里的。" }
+
+# node 的顺序很讲究：**不要优先用 process.execPath**——在 Electron 宿主里它就是
+# Electron 本体，拿它跑 pnpm 会报「%1 is not a valid Win32 application」。
+# 正确顺序：dsh 自带 node → PATH 里的 node → 只在宿主确实是纯 Node 时才用 execPath。
+$Node = $null
+if (Test-Path $BundledNode) {
+  $Node = $BundledNode
+} else {
+  $pathNode = (Get-Command node -ErrorAction SilentlyContinue).Source
+  if ($pathNode) {
+    $Node = $pathNode
+  } elseif ($PSHOME -notmatch 'electron') {
+    $Node = $process.execPath
+  }
+}
+if (-not $Node) {
+  Die "找不到 node：dsh 自带的（$BundledNode）不存在，PATH 里也没有，且当前宿主不是纯 Node。请先安装 Node.js。"
+}
 
 function Invoke-Pnpm([string]$InDirectory, [string[]]$PnpmArguments) {
   # 用 Start-Process 显式指定**子进程的工作目录**，而不是 Push-Location 或 pnpm --dir：
@@ -71,20 +87,34 @@ function Invoke-Pnpm([string]$InDirectory, [string[]]$PnpmArguments) {
   $stamp = [Guid]::NewGuid().ToString('N').Substring(0, 6)
   $tempOut = Join-Path $env:TEMP "dsh-github-pnpm-out-$stamp.log"
   $tempErr = Join-Path $env:TEMP "dsh-github-pnpm-err-$stamp.log"
-  if ((Test-Path $BundledPnpm) -and (Test-Path $BundledNode)) {
-    $exe = $BundledNode
+  if ((Test-Path $BundledPnpm) -and $Node) {
+    # 用 node 跑 pnpm.cjs：.cjs 不是可执行文件，直接 & 在 Windows 上会失败；
+    # 而且这里用 $Node（可能来自 PATH）而不是 $BundledNode，模拟/精简环境下也能跑。
+    $exe = $Node
     $exeArgs = @($BundledPnpm) + $PnpmArguments
   } else {
-    $pnpm = (Get-Command pnpm -ErrorAction SilentlyContinue).Source
-    if (-not $pnpm) { Die "找不到 pnpm：既没有 dsh 自带的 $BundledPnpm，也没有 PATH 里的。" }
-    if ($pnpm -match '\.(cmd|bat)$') {
+    # PATH 里的 pnpm 在不同安装方式下可能是三种东西，必须分别处理：
+    #   pnpm.cmd  → 直接交给 cmd.exe 启动
+    #   pnpm.ps1  → 是 PowerShell **脚本**，Start-Process 不能直接跑（会报
+    #               「%1 is not a valid Win32 application」），要用 powershell 包一层
+    #   其它      → 当真可执行文件启动
+    $cmdPath = (Get-Command pnpm.cmd -ErrorAction SilentlyContinue).Source
+    $ps1Path = (Get-Command pnpm.ps1 -ErrorAction SilentlyContinue).Source
+    $bare = Get-Command pnpm -ErrorAction SilentlyContinue
+    if ($cmdPath) {
       $exe = $env:ComSpec
-      $exeArgs = @('/c', $pnpm) + $PnpmArguments
-    } else {
-      $exe = $pnpm
+      $exeArgs = @('/c', $cmdPath) + $PnpmArguments
+    } elseif ($ps1Path) {
+      $exe = Join-Path $PSHOME 'powershell.exe'
+      $exeArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ps1Path) + $PnpmArguments
+    } elseif ($bare) {
+      $exe = $bare.Source
       $exeArgs = $PnpmArguments
+    } else {
+      Die "找不到 pnpm：dsh 自带的（$BundledPnpm）不存在，PATH 里也没有。"
     }
   }
+  Info "启动 pnpm：$exe $($exeArgs -join ' ')"
   $proc = Start-Process -FilePath $exe -ArgumentList $exeArgs -WorkingDirectory $InDirectory `
     -NoNewWindow -Wait -PassThru -RedirectStandardOutput $tempOut -RedirectStandardError $tempErr
   foreach ($file in @($tempOut, $tempErr)) {

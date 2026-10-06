@@ -126,6 +126,7 @@ lib/
   cli.mjs         命令行
 scripts/
   install.ps1 / install.sh   一键安装
+  upload-via-api.mjs         备用上传：走 Git Data API，绕过被墙/被重置的 git 传输域
 test/
   lifecycle-unit.mjs  成本策略与安全边界       80 项
   tools-unit.mjs      工具表与 .git/config 解析 77 项
