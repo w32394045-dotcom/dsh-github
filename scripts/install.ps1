@@ -1,4 +1,4 @@
-# 把 @ptfm/dsh-github 装进本机 DSH（Windows）。
+﻿# 把 @ptfm/dsh-github 装进本机 DSH（Windows）。
 #
 # 做三件事，全部幂等：
 #   1. 把插件复制到 $DSH_HOME/plugins/dsh-github（或 --From <本地目录> 直接用本地 checkout）；
@@ -160,11 +160,47 @@ if ($bundles -notcontains $PluginName) {
   Info "bundles 里已有 $PluginName，保持不变"
 }
 
-# 写回：保持 4 空格缩进与末尾换行，避免把用户文件改成另一种风格。
-$json = $Manifest | ConvertTo-Json -Depth 10
-$json = $json -replace "`r`n", "`n"
-Set-Content -Path $ManifestPath -Value $json -Encoding UTF8
-Ok "已更新 $ManifestPath"
+# 写回 package.json。
+#
+# 两个坑，都会让 DSH 读不了 profile 清单：
+#   1. `Set-Content -Encoding UTF8` 在 Windows PowerShell 5.1 下**必定加 BOM**，
+#      而 DSH 的 JSON 解析不接受 BOM（会报 "Unexpected token ﻿"）。必须用
+#      UTF8Encoding($false) 显式写无 BOM 的 UTF-8。
+#   2. `ConvertTo-Json` 会把缩进写成这种带多余空格的风格（`"name":  "..."`），
+#      虽然合法但很难看，所以自己按 4 空格缩进序列化。
+function Write-JsonNoBom([string]$Path, [object]$Value, [string]$Indent = '    ') {
+  $lines = New-Object System.Collections.Generic.List[string]
+  $lines.Add('{')
+  $keys = @($Value.PSObject.Properties.Name)
+  for ($i = 0; $i -lt $keys.Count; $i++) {
+    $key = $keys[$i]
+    $item = $Value.$key
+    $comma = if ($i -lt $keys.Count - 1) { ',' } else { '' }
+    $rendered = $item | ConvertTo-Json -Depth 10
+    $renderedLines = @($rendered -split "`r?`n")
+    if ($renderedLines.Count -eq 1) {
+      $lines.Add("$Indent`"$key`": $($renderedLines[0])$comma")
+    } else {
+      $lines.Add("$Indent`"$key`": $($renderedLines[0])")
+      for ($j = 1; $j -lt $renderedLines.Count; $j++) {
+        $suffix = if ($j -eq $renderedLines.Count - 1) { $comma } else { '' }
+        $lines.Add("$Indent$($renderedLines[$j])$suffix")
+      }
+    }
+  }
+  $lines.Add('}')
+  $text = ($lines -join "`n") + "`n"
+  [System.IO.File]::WriteAllText($Path, $text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+Write-JsonNoBom -Path $ManifestPath -Value $Manifest
+# 立刻自检：BOM 与 JSON 合法性都验一遍，避免把 profile 写坏却毫无察觉。
+$written = [System.IO.File]::ReadAllBytes($ManifestPath)
+if ($written.Length -ge 3 -and $written[0] -eq 0xEF -and $written[1] -eq 0xBB -and $written[2] -eq 0xBF) {
+  Die "写入后仍带 BOM，DSH 会读不了这个 profile：$ManifestPath"
+}
+try { $null = [System.IO.File]::ReadAllText($ManifestPath) | ConvertFrom-Json } catch { Die "写出的 JSON 不合法：$($_.Exception.Message)" }
+Ok "已更新 $ManifestPath（无 BOM，JSON 校验通过）"
 
 # ── 3. 安装依赖 ─────────────────────────────────────────────────
 Info "在 profile 里安装依赖…"
