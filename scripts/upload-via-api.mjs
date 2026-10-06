@@ -31,7 +31,16 @@ const [owner, repo] = slug.split('/')
 const repoRoot = resolve(import.meta.dirname, '..')
 
 /** 文本扩展名：这些按 UTF-8 读、转 LF。其余按二进制处理。 */
-const TEXT_EXT = new Set(['.mjs', '.js', '.json', '.yml', '.yaml', '.md', '.txt', '.sh', '.ps1', '.gitignore', '.gitattributes'])
+const TEXT_EXT = new Set(['.mjs', '.js', '.json', '.yml', '.yaml', '.md', '.txt', '.sh', '.gitignore', '.gitattributes'])
+
+/**
+ * 必须**按原始字节**提交的扩展名。
+ *
+ * `.ps1` 在 Windows PowerShell 5.1 上必须是「UTF-8 带 BOM」才能被正确解析（否则它
+ * 按 ANSI 读，含中文的脚本会直接报语法错）。BOM 是文件字节的一部分，所以这里不能
+ * 走文本处理——按文本读会把 BOM 丢掉，别人克隆下来跑安装脚本就崩。
+ */
+const BINARY_EXT = new Set(['.ps1'])
 
 async function api(path, init = {}) {
   const response = await fetch(`https://api.github.com${path}`, {
@@ -65,6 +74,7 @@ function listFiles() {
 /** 读一个文件，按 git 存储形态返回 Buffer。 */
 function readAsStored(relPath) {
   const ext = extname(relPath).toLowerCase()
+  if (BINARY_EXT.has(ext)) return readFileSync(resolve(repoRoot, relPath))
   const isText = TEXT_EXT.has(ext) || relPath === 'LICENSE'
   if (isText) {
     const text = readFileSync(resolve(repoRoot, relPath), 'utf8').replace(/\r\n/g, '\n')
