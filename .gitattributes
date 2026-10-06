@@ -1,0 +1,4 @@
+# 统一用 LF：这个仓库会同时被 Windows / macOS / Linux 克隆，
+# 而 .sh / .mjs 里的 shebang 和 CRLF 混在一起会出各种怪问题。
+* text=auto eol=lf
+*.png binary
