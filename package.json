@@ -1,0 +1,51 @@
+{
+  "name": "@ptfm/dsh-github",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GitHub 账号接入：设置里登录 GitHub（PAT / OAuth Device Flow / 纯 token CLI），凭据安全落盘，agent 通过 github-* 工具以该账号真实调用 GitHub API",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/main.mjs",
+  "bin": {
+    "dsh-github": "lib/cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/main.mjs"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cli": {
+      "default": "./lib/cli.mjs"
+    },
+    "./store": {
+      "default": "./lib/store.mjs"
+    },
+    "./rest": {
+      "default": "./lib/rest.mjs"
+    },
+    "./device-flow": {
+      "default": "./lib/device-flow.mjs"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  }
+}

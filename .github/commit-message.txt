@@ -1,0 +1,26 @@
+feat: GitHub 接入插件（登录 + 12 个工具 + 云端成本护栏）
+
+设置里登录一次，agent 就能以你的 GitHub 账号真实干活。凭据只落在本机
+$DSH_HOME/github.json，不经过模型上下文；agent 通过 shell 跑 git/gh 时也能
+拿到登录态（DSH_GITHUB_TOKEN 注入）。
+
+主要能力：
+- 三条登录路径：PAT 手填、OAuth Device Flow（无需 client_secret）、纯 token CLI
+- 12 个 agent 工具：search / status / account / repo / issues / pulls /
+  branches / actions / releases / notifications / cloud / api
+- github-search 单独做厚：分页与总数、@me 展开、自动限定当前 git 仓库、
+  90 秒缓存、422 与限流的具体排查建议
+- github-cloud：Codespaces 生命周期、自托管运行器、Actions 配额、Pages、
+  Packages、Models，并带成本报告
+- 云端成本护栏：创建时默认 15 分钟空闲自动停机；计费动作前预检；闲置回收；
+  安全边界优先于省钱（最近有活动 / 时间戳不可信 / 持有租约时绝不关机）
+- 设置页可切三种成本模式（平衡 / 极致省钱 / 手动）
+
+工程：
+- 零运行时依赖，只用 Node 内置模块与 DSH 服务接口
+- 376 项离线断言（含带 inject 守卫的宿主加载测试、真实 .git/config 解析、
+  stub fetch 的搜索与云服务行为测试），另有 12 项真实联网冒烟
+- 一键安装脚本（Windows + macOS/Linux，幂等）
+
+已知约束记录在 README「开发须知」：精确路由不能带尾斜杠、tools.register 的
+parameters 必须是原生 JSON Schema、取服务必须走 ctx.get。

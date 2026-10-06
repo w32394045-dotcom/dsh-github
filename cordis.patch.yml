@@ -1,0 +1,15 @@
+# GitHub 接入（@ptfm/dsh-github）bundle 层。
+#
+# 只插入一个宿主条目；浏览器半边由 package.json 的 dsh.client 声明自动装载，
+# 并会在「设置」里多出一页「GitHub」。
+#
+# 这里的 config 只是首次运行的默认值（会写进 profile patch）。token 本身**不在**
+# 这里，也不在 profile 里：它落在 $DSH_HOME/github.json，或者来自环境变量
+# GITHUB_TOKEN / DSH_GITHUB_TOKEN。
+
+- insert:
+    - id: github
+      name: '@ptfm/dsh-github'
+      config:
+        defaultRepo: ''
+        requestTimeoutMs: 30000

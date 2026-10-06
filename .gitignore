@@ -1,0 +1,18 @@
+# 依赖与构建产物（本插件零依赖，node_modules 只在 profile 侧出现）
+node_modules/
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
+# 运行时数据：绝不能进仓库
+# （token 存在 $DSH_HOME/github.json，不在仓库里；这里再兜一层保险）
+*.token
+.github-accept-token
+codespace-leases.json
+*acceptance*.json
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
